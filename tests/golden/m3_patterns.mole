@@ -1,0 +1,36 @@
+datatype shape = Circle of int | Rect of int * int;
+fun area (Circle r) = 3 * r * r
+  | area (Rect (w, h)) = w * h;
+area (Rect (3, 5));
+area (Circle 2);
+Circle 2;
+[Circle 1, Rect (2, 3)];
+datatype 'a tree = Leaf | Node of 'a tree * 'a * 'a tree;
+fun insert (x, Leaf) = Node (Leaf, x, Leaf)
+  | insert (x, Node (l, v, r)) =
+      if x < v then Node (insert (x, l), v, r)
+      else Node (l, v, insert (x, r));
+fun toList Leaf = []
+  | toList (Node (l, v, r)) = toList l @ [v] @ toList r;
+toList (foldl insert Leaf [5, 2, 8, 1]);
+insert (1, Leaf);
+fun sum [] = 0
+  | sum (x :: xs) = x + sum xs;
+sum [1, 2, 3, 4];
+fun fib 0 = 0 | fib 1 = 1 | fib n = fib (n - 1) + fib (n - 2);
+fib 20;
+case SOME 3 of NONE => 0 | SOME n => n + 1;
+fun first [] = NONE | first (x :: _) = SOME x;
+first ["a", "b"];
+SOME (SOME ~1);
+val [p, q] = [1, 2];
+val h :: t = [7, 8, 9];
+fun swap (a, b) = (b, a);
+(fn [] => "empty" | _ => "nonempty") [1];
+fun zero 0 = "zero";
+zero 1;
+val [r] = [1, 2];
+Circle "big";
+case 1 of true => 0 | false => 1;
+fun dup (x, x) = x;
+Nope 3;

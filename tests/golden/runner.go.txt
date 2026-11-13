@@ -1,0 +1,75 @@
+package tests
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/holmes89/mole/interp"
+)
+
+// TestGolden runs every tests/golden/mN_*.mole file whose N is at most
+// interp.Milestone and compares the output with the matching .out file.
+func TestGolden(t *testing.T) {
+	files, err := filepath.Glob("golden/m*_*.mole")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no golden files found: %v", err)
+	}
+	for _, file := range files {
+		base := filepath.Base(file)
+		n := int(base[1] - '0')
+		if n > interp.Milestone {
+			continue
+		}
+		t.Run(base, func(t *testing.T) {
+			src, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := os.ReadFile(strings.TrimSuffix(file, ".mole") + ".out")
+			if err != nil {
+				t.Fatal(err)
+			}
+			withTypes := !strings.HasPrefix(string(src), "(* golden: untyped *)")
+
+			var buf bytes.Buffer
+			in := interp.New(&buf)
+			chunks, rest, err := interp.SplitInput(string(src))
+			if err != nil {
+				t.Fatalf("SplitInput: %v", err)
+			}
+			if strings.TrimSpace(rest) != "" {
+				t.Fatalf("incomplete input at end of file: %q", rest)
+			}
+			for _, chunk := range chunks {
+				results, err := in.Eval(chunk)
+				for _, r := range results {
+					buf.WriteString(r.Line(withTypes) + "\n")
+				}
+				if err != nil {
+					buf.WriteString(interp.FormatError(err) + "\n")
+				}
+			}
+
+			got := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+			exp := strings.Split(strings.TrimRight(string(want), "\n"), "\n")
+			for i := 0; i < len(got) || i < len(exp); i++ {
+				g, e := "<missing>", "<missing>"
+				if i < len(got) {
+					g = got[i]
+				}
+				if i < len(exp) {
+					e = exp[i]
+				}
+				if e == "Error:" && strings.HasPrefix(g, "Error:") {
+					continue
+				}
+				if g != e {
+					t.Errorf("%s line %d:\n  want: %s\n  got:  %s", base, i+1, e, g)
+				}
+			}
+		})
+	}
+}

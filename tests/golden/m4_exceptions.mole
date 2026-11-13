@@ -1,0 +1,21 @@
+exception Oops;
+exception Bad of string;
+fun safeDiv (_, 0) = raise Div
+  | safeDiv (a, b) = a div b;
+safeDiv (10, 0) handle Div => ~1;
+safeDiv (10, 3);
+(raise Bad "x") handle Bad msg => msg ^ "!";
+hd [] handle Empty => 0;
+Bad "y";
+fun check n = if n < 0 then raise Fail "negative" else n;
+check 5;
+check ~5 handle Fail m => size m;
+raise Bad "boom";
+(raise Oops) handle Bad _ => 1;
+raise Fail "nope";
+fun firstPos [] = raise Oops
+  | firstPos (x :: xs) = if x > 0 then x else firstPos xs;
+firstPos [~1, 0, 3] handle Oops => 0;
+firstPos [~1] handle Oops => 0;
+raise 5;
+1 handle Oops => "one";
