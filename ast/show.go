@@ -134,6 +134,12 @@ func ShowInt(v int64) string {
 		s = append(s, byte('0'+v%10))
 		v /= 10
 	}
+	if len(s) == 0 {
+		return "0"
+	}
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
 	return string(s)
 }
 
