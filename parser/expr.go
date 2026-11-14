@@ -26,7 +26,102 @@ func ParseExpr(src string) (ast.Expr, error) {
 }
 
 func (p *parser) parseExpr() (ast.Expr, bool) {
-	return p.parseApp()
+	return p.parseBinary(1)
+}
+
+// operatorLevel returns the precedence level of an operator.
+// Higher number means higher precedence (binds tighter).
+func operatorLevel(t token.Token) int {
+	switch t.Kind {
+	case token.KEYWORD:
+		switch t.Text {
+		case "orelse":
+			return 1
+		case "andalso":
+			return 2
+		case "o":
+			return 3
+		case "div", "mod":
+			return 7
+		default:
+			return 0
+		}
+	case token.SYMBOL:
+		switch t.Text {
+		case "::", "@":
+			return 5
+		case "+", "-", "^":
+			return 6
+		case "*", "div", "mod":
+			return 7
+		case "=", "<>", "<", ">", "<=", ">=":
+			return 4
+		default:
+			return 0
+		}
+	default:
+		return 0
+	}
+}
+
+// isRightAssociative returns true if the operator at level l is right-associative.
+func isRightAssociative(l int) bool {
+	switch l {
+	case 5: // ::, @
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *parser) parseBinary(minLevel int) (ast.Expr, bool) {
+	left, ok := p.parseApp()
+	if !ok {
+		return nil, false
+	}
+
+	for {
+		t := p.peek()
+		l := operatorLevel(t)
+
+		if l < minLevel {
+			break
+		}
+
+		p.next() // consume the operator
+
+		// For left-associative operators, parse right at level+1
+		// For right-associative operators (like ::, @), parse right at same level
+		parseRightLevel := l + 1
+		if isRightAssociative(l) {
+			parseRightLevel = l
+		}
+
+		right, ok := p.parseBinary(parseRightLevel)
+		if !ok {
+			return nil, false
+		}
+
+		var expr ast.Expr
+
+		switch t.Text {
+		case "orelse":
+			expr = &ast.OrElse{Node: ast.Node{P: t.Pos}, L: left, R: right}
+		case "andalso":
+			expr = &ast.AndAlso{Node: ast.Node{P: t.Pos}, L: left, R: right}
+		default:
+			// For all other operators, create an App node with a tuple of arguments
+			expr = &ast.App{
+				Node: ast.Node{P: t.Pos},
+				Fn:   &ast.Var{Node: ast.Node{P: t.Pos}, Name: t.Text},
+				Arg:  &ast.Tuple{Node: ast.Node{P: t.Pos}, Elems: []ast.Expr{left, right}},
+			}
+		}
+
+		left = expr
+	}
+
+	return left, true
 }
 
 func startsAtom(t token.Token) bool {
