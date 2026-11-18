@@ -85,3 +85,44 @@ func TestInfix(t *testing.T) {
 		})
 	}
 }
+
+func TestForms(t *testing.T) {
+	tests := []struct {
+		src  string
+		want string
+	}{
+		{"if x > 5 then 1 else 2", "(if (app > (tuple x 5)) 1 2)"},
+		{"fn a => fn b => a + b", "(fn (a (fn (b (app + (tuple a b))))))"},
+		{"fn (a, _) => a", "(fn ((tuple a _) a))"},
+		{"fn () => 1", "(fn (() 1))"},
+		{"f (fn x => x) 1", "(app (app f (fn (x x))) 1)"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.src, func(t *testing.T) {
+			expr, err := ParseExpr(tc.src)
+			if err != nil && strings.HasPrefix(tc.want, "<error>") {
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseExpr(%q) error: %v", tc.src, err)
+				return
+			}
+			got := ast.Show(expr)
+			if got != tc.want {
+				t.Errorf("Show() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("case not supported", func(t *testing.T) {
+		_, err := ParseExpr("case x of y => y")
+		if err == nil {
+			t.Errorf("ParseExpr(%q) should return error", "case x of y => y")
+			return
+		}
+		if !strings.Contains(err.Error(), "not supported") {
+			t.Errorf("error message = %q, want to contain 'not supported'", err.Error())
+		}
+	})
+}

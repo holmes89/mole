@@ -39,14 +39,14 @@ func Show(n any) string {
 	case *If:
 		return "(if " + Show(x.Cond) + " " + Show(x.Then) + " " + Show(x.Else) + ")"
 	case *Fn:
-		arms := ""
-		for i, arm := range x.Arms {
+		pats := ""
+		for i, pat := range x.Pats {
 			if i > 0 {
-				arms += " "
+				pats += " "
 			}
-			arms += "(" + Show(arm.Pat) + " " + Show(arm.Body) + ")"
+			pats += Show(pat)
 		}
-		return "(fn " + arms + ")"
+		return "(fn " + pats + " => " + Show(x.Body) + ")"
 	case *Let:
 		decs := ""
 		for i, d := range x.Decs {

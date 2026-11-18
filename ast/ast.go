@@ -19,7 +19,7 @@ type Tuple struct { Node; Elems []Expr }   // zero elements is unit
 type List struct { Node; Elems []Expr }
 type App struct { Node; Fn, Arg Expr }
 type If struct { Node; Cond, Then, Else Expr }
-type Fn struct { Node; Arms []Arm }
+type Fn struct { Node; Pats []Pat; Body Expr }
 type Let struct { Node; Decs []Dec; Body []Expr }
 type Seq struct { Node; Exprs []Expr }
 type AndAlso struct { Node; L, R Expr }

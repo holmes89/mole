@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -26,7 +27,161 @@ func ParseExpr(src string) (ast.Expr, error) {
 }
 
 func (p *parser) parseExpr() (ast.Expr, bool) {
+	t := p.peek()
+	switch t.Kind {
+	case token.KEYWORD:
+		switch t.Text {
+		case "if":
+			fmt.Printf("DEBUG: parsing if expr at pos %d (%s)\n", t.Pos, t.Text)
+			p.next() // consume "if"
+			fmt.Printf("DEBUG: after consuming if, at pos %d (%v %q)\n", p.peek().Pos, p.peek().Kind, p.peek().Text)
+			cond, ok := p.parseExpr()
+			if !ok {
+				return nil, false
+			} else if p.peek().Text != "then" {
+				fmt.Printf("DEBUG: after cond, at pos %d (%v %q), expecting 'then' but got '%s'\n", p.peek().Pos, p.peek().Kind, p.peek().Text, p.peek().Text)
+				p.next() // consume "then"
+				thenExpr, ok := p.parseExpr()
+				if !ok {
+					return nil, false
+				} else if p.peek().Text != "else" {
+					fmt.Printf("DEBUG: after thenExpr, at pos %d (%v %q), expecting 'else' but got '%s'\n", p.peek().Pos, p.peek().Kind, p.peek().Text, p.peek().Text)
+					p.next() // consume "else"
+					elseExpr, ok := p.parseExpr()
+					if !ok {
+						return nil, false
+					} else {
+						expr := &ast.If{Node: ast.Node{P: t.Pos}, Cond: cond, Then: thenExpr, Else: elseExpr}
+						return expr, true
+					}
+				}
+			}
+		case "fn":
+			fmt.Printf("DEBUG: parsing fn expr at pos %d (%s)\n", t.Pos, t.Text)
+			p.next() // consume "fn"
+			fmt.Printf("DEBUG: after consuming fn, at pos %d (%v %q)\n", p.peek().Pos, p.peek().Kind, p.peek().Text)
+			pats, ok := p.parsePats()
+			if !ok {
+				return nil, false
+			} else {
+				fmt.Printf("DEBUG: after parsePats(), at pos %d (%v %q), got %d patterns\n", p.peek().Pos, p.peek().Kind, p.peek().Text, len(pats))
+				body, ok := p.parseExpr()
+				if !ok {
+					return nil, false
+				} else {
+					fmt.Printf("DEBUG: after parseExpr(body), at pos %d (%v %q)\n", p.peek().Pos, p.peek().Kind, p.peek().Text)
+					expr := &ast.Fn{Node: ast.Node{P: t.Pos}, Pats: pats, Body: body}
+					return expr, true
+				}
+			}
+		case "let":
+			fmt.Printf("DEBUG: parsing let expr at pos %d (%s)\n", t.Pos, t.Text)
+			p.next() // consume "let"
+			var e ast.Expr = nil
+			var b bool = false
+			e = nil
+			b = false
+			return e, b
+		default:
+			fmt.Printf("DEBUG: default case for KEYWORD at pos %d (%s)\n", t.Pos, t.Text)
+			var e ast.Expr = nil
+			var b bool = false
+			e = nil
+			b = false
+			return e, b
+		}
+	case token.SYMBOL:
+		fmt.Printf("DEBUG: SYMBOL case at pos %d (%v %q)\n", t.Pos, t.Kind, t.Text)
+		if t.Text == "(" {
+			return p.parseBinary(1)
+		} else {
+			return p.parseBinary(1)
+		}
+	}
 	return p.parseBinary(1)
+}
+
+func (p *parser) parsePats() ([]ast.Pat, bool) {
+	var pats []ast.Pat
+	if p.peek().Text == "(" {
+		p.next() // consume "("
+		for p.peek().Text != ")" {
+			pat, ok := p.parsePat()
+			if !ok {
+				return nil, false
+			}
+			pats = append(pats, pat)
+			if p.peek().Text == "," {
+				p.next() // consume ","
+			} else if p.peek().Text == "=>" {
+				break
+			} else {
+				break
+			}
+		}
+		p.next() // consume ")"
+		if len(pats) == 0 {
+			return []ast.Pat{}, true
+		}
+		return pats, true
+	} else {
+		pat, ok := p.parsePat()
+		if !ok {
+			return nil, false
+		}
+		p.next() // consume "=>"
+		return []ast.Pat{pat}, true
+	}
+}
+
+func (p *parser) parsePat() (ast.Pat, bool) {
+	t := p.peek()
+	switch t.Kind {
+	case token.SYMBOL:
+		if t.Text == "(" {
+			return p.parseParenPat()
+		}
+		if t.Text == "_" {
+			p.next()
+			return &ast.PWild{Node: ast.Node{P: t.Pos}}, true
+		}
+	case token.IDENT, token.LONGID:
+		p.next()
+		return &ast.PVar{Node: ast.Node{P: t.Pos}, Name: t.Text}, true
+	}
+
+	expr, ok := p.parseExpr()
+	if ok {
+		return expr, false
+	}
+
+	return nil, false
+}
+
+func (p *parser) parseParenPat() (ast.Pat, bool) {
+	p.next() // consume "("
+	var elems []ast.Pat
+	for p.peek().Text != ")" {
+		pat, ok := p.parsePat()
+		if !ok {
+			return nil, false
+		}
+		elems = append(elems, pat)
+		if p.peek().Text == "," {
+			p.next() // consume ","
+		} else {
+			break
+		}
+	}
+	p.next() // consume ")"
+
+	if len(elems) == 0 {
+		return &ast.PTuple{Node: ast.Node{}, Elems: []ast.Pat{}}, true
+	}
+	if len(elems) == 1 {
+		return elems[0], true
+	}
+	return &ast.PTuple{Node: ast.Node{P: elems[0].Pos()}, Elems: elems}, true
 }
 
 // operatorLevel returns the precedence level of an operator.
@@ -75,6 +230,7 @@ func isRightAssociative(l int) bool {
 }
 
 func (p *parser) parseBinary(minLevel int) (ast.Expr, bool) {
+	fmt.Printf("DEBUG: parseBinary(%d) at pos %d (%v %q)\n", minLevel, p.peek().Pos, p.peek().Kind, p.peek().Text)
 	left, ok := p.parseApp()
 	if !ok {
 		return nil, false
@@ -88,6 +244,7 @@ func (p *parser) parseBinary(minLevel int) (ast.Expr, bool) {
 			break
 		}
 
+		fmt.Printf("DEBUG: consuming operator %s at pos %d (%v %q)\n", t.Text, t.Pos, t.Kind, t.Text)
 		p.next() // consume the operator
 
 		// For left-associative operators, parse right at level+1
@@ -97,6 +254,7 @@ func (p *parser) parseBinary(minLevel int) (ast.Expr, bool) {
 			parseRightLevel = l
 		}
 
+		fmt.Printf("DEBUG: about to call parseBinary(%d) for right side\n", parseRightLevel)
 		right, ok := p.parseBinary(parseRightLevel)
 		if !ok {
 			return nil, false
@@ -129,6 +287,10 @@ func startsAtom(t token.Token) bool {
 	case token.INT, token.STRING, token.IDENT, token.LONGID, token.CON:
 		return true
 	case token.SYMBOL:
+		// Include => so that fn expressions work correctly
+		if t.Text == "=>" {
+			return true
+		}
 		return t.Text == "(" || t.Text == "["
 	default:
 		return false
@@ -136,6 +298,7 @@ func startsAtom(t token.Token) bool {
 }
 
 func (p *parser) parseApp() (ast.Expr, bool) {
+	fmt.Printf("DEBUG: parseApp at pos %d (%v %q)\n", p.peek().Pos, p.peek().Kind, p.peek().Text)
 	expr, ok := p.parseAtom()
 	if !ok {
 		return nil, false
@@ -151,6 +314,7 @@ func (p *parser) parseApp() (ast.Expr, bool) {
 }
 
 func (p *parser) parseAtom() (ast.Expr, bool) {
+	fmt.Printf("DEBUG: parseAtom at pos %d (%v %q)\n", p.peek().Pos, p.peek().Kind, p.peek().Text)
 	t := p.peek()
 	switch t.Kind {
 	case token.INT:
